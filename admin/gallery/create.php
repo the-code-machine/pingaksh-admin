@@ -93,6 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mediaPath = null;
     $thumbnailPath = null;
 
+            if ($form['type'] === 'image' && !$thumbnailPath) {
+                $thumbnailPath = $mediaPath;
+            }
     if (!$errors) {
 
         try {
