@@ -42,18 +42,12 @@ $menuItems = [
         'url' => BASE_URL . '/admin/announcements/index.php',
         'icon' => 'megaphone'
     ],
-    [
-        'key' => 'documents',
-        'label' => 'Documents',
-        'url' => BASE_URL . '/admin/documents/index.php',
-        'icon' => 'file-text'
-    ],
-    [
-        'key' => 'settings',
-        'label' => 'Settings',
-        'url' => '#',
-        'icon' => 'settings'
-    ],
+    // [
+    //     'key' => 'settings',
+    //     'label' => 'Settings',
+    //     'url' => '#',
+    //     'icon' => 'settings'
+    // ],
 ];
 
 ?>
@@ -137,6 +131,7 @@ $menuItems = [
         <!-- Brand Header -->
         <div class="flex h-20 items-center border-b border-white/10 px-6">
             <div>
+
                 <div class="text-xl font-bold tracking-wider text-pingaksh-sand uppercase">
                     PINGAKSH
                 </div>
