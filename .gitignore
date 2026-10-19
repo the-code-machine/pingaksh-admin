@@ -1,0 +1,9 @@
+.env
+.DS_Store
+
+/uploads/*
+!/uploads/gallery/.gitkeep
+!/uploads/projects/.gitkeep
+!/uploads/directors/.gitkeep
+!/uploads/announcements/.gitkeep
+!/uploads/documents/.gitkeep
