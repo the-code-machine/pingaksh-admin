@@ -244,33 +244,41 @@ body {
 
     <nav class="menu">
 
-        <a href="/admin/index.php" class="active">
-            🏠 <span>Dashboard</span>
-        </a>
+  <!-- Sidebar -->
 
-        <a href="/admin/gallery/index.php">
-            🖼️ <span>Gallery</span>
-        </a>
+<a href="index.php" class="active">
+    🏠 <span>Dashboard</span>
+</a>
 
-        <a href="/admin/projects/index.php">
-            📁 <span>Projects</span>
-        </a>
+<a href="gallery/index.php">
+    🖼️ <span>Gallery</span>
+</a>
 
-        <a href="/admin/directors/index.php">
-            👤 <span>Directors</span>
-        </a>
+<a href="projects/index.php">
+    📁 <span>Projects</span>
+</a>
 
-        <a href="/admin/announcements/index.php">
-            📢 <span>Announcements</span>
-        </a>
+<a href="directors/index.php">
+    👤 <span>Directors</span>
+</a>
 
-        <a href="/admin/documents/index.php">
-            📄 <span>Documents</span>
-        </a>
+<a href="announcements/index.php">
+    📢 <span>Announcements</span>
+</a>
 
-        <a href="#">
-            ⚙️ <span>Settings</span>
-        </a>
+<a href="documents/index.php">
+    📄 <span>Documents</span>
+</a>
+
+<a href="#">
+    ⚙️ <span>Settings</span>
+</a>
+
+<div class="logout">
+    <a href="logout.php">
+        Logout
+    </a>
+</div>
 
     </nav>
 
