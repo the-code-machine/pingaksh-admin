@@ -9,12 +9,13 @@ $pageTitle = 'New Announcement';
 $activeMenu = 'announcements';
 
 $errors = [];
-$defaultTags = "[\n  \"Pingaksh Group\",\n  \"Corporate\"\n]";
+// Default tags are now just a clean array, the JS handles the JSON conversion
+$defaultTags = '["Pingaksh Group", "Corporate"]';
 
 $form = [
     'slug' => '', 'title' => '', 'excerpt' => '', 'category' => 'Corporate & Governance',
     'release_code' => '', 'date_label' => date('d F Y'), 'iso_date' => date('Y-m-d'), 'release_year' => date('Y'),
-    'location' => 'New Delhi', 'image_alt' => '', 'redirect_href' => '/media/press-releases/', 
+    'location' => 'New Delhi', 'image_alt' => '', 'redirect_href' => '/media/press-releases/',
     'pdf_download_href' => '', 'tags' => $defaultTags, 'is_featured' => '0', 'is_published' => '1',
 ];
 
@@ -23,11 +24,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['is_featured'] = isset($_POST['is_featured']) ? '1' : '0';
     $form['is_published'] = isset($_POST['is_published']) ? '1' : '0';
 
-    if (empty(trim($form['title']))) $errors[] = 'Headline (Title) is required.';
-    if (empty(trim($form['slug']))) $errors[] = 'URL Slug is required.';
+    if (empty(trim($form['title']))) {
+        $errors[] = 'Headline (Title) is required.';
+    }
+    if (empty(trim($form['slug']))) {
+        $errors[] = 'URL Slug is required.';
+    }
 
     $validatedTags = json_encode([]);
     try {
+        // Validation helper still ensures the hidden input sends valid JSON
         $validatedTags = announcementsValidateTags($form['tags']);
     } catch (Exception $e) {
         $errors[] = $e->getMessage();
@@ -58,9 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php?created=1');
             exit;
         } catch (PDOException $e) {
-            announcementsDeleteFile($imagePath); // cleanup on fail
-            if ($e->errorInfo[1] === 1062) $errors[] = 'An announcement with this slug already exists.';
-            else $errors[] = 'Database error: ' . $e->getMessage();
+            announcementsDeleteFile($imagePath);
+            if ($e->errorInfo[1] === 1062) {
+                $errors[] = 'An announcement with this auto-generated slug already exists. Please tweak the title slightly.';
+            } else {
+                $errors[] = 'Database error: ' . $e->getMessage();
+            }
         } catch (Exception $e) {
             $errors[] = $e->getMessage();
         }
@@ -92,12 +101,15 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="grid gap-5 md:grid-cols-2">
                 <div class="md:col-span-2">
                     <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Headline / Title *</label>
-                    <input type="text" name="title" required value="<?= htmlspecialchars($form['title']) ?>" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
+                    <input type="text" id="titleInput" name="title" required value="<?= htmlspecialchars($form['title']) ?>" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
                 </div>
+
+                <!-- Auto-Generated Slug (Readonly) -->
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">URL Slug *</label>
-                    <input type="text" name="slug" required value="<?= htmlspecialchars($form['slug']) ?>" placeholder="e.g. grid-connectivity-2026" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
+                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">URL Slug (Auto-Generated) *</label>
+                    <input type="text" id="slugInput" name="slug" readonly required value="<?= htmlspecialchars($form['slug']) ?>" placeholder="auto-generated-from-title" class="w-full rounded-xl border border-slate-200 bg-slate-100 text-slate-500 px-3 py-2.5 text-sm cursor-not-allowed outline-none">
                 </div>
+
                 <div>
                     <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Category</label>
                     <select name="category" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
@@ -137,10 +149,21 @@ require_once __DIR__ . '/../../includes/header.php';
                     <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">ISO Date (For sorting)</label>
                     <input type="date" name="iso_date" value="<?= htmlspecialchars($form['iso_date']) ?>" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
                 </div>
-                <div>
-                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Tags (JSON Array)</label>
-                    <textarea name="tags" rows="2" class="w-full font-mono text-xs rounded-xl border border-slate-200 bg-slate-900 text-green-400 px-3 py-2 outline-none"><?= htmlspecialchars($form['tags']) ?></textarea>
+
+                <!-- NEW: Interactive Tags UI -->
+                <div class="md:col-span-3">
+                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Keyword Tags</label>
+                    <div class="flex items-center gap-2 mb-3 max-w-md">
+                        <input type="text" id="tagInput" placeholder="Add a tag (e.g. CSR, Hydro)..." class="flex-1 rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
+                        <button type="button" id="addTagBtn" class="rounded-xl bg-pingaksh-navy text-pingaksh-sand px-4 py-2.5 hover:bg-pingaksh-terracotta hover:text-white transition flex items-center justify-center cursor-pointer">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div id="tagsContainer" class="flex flex-wrap gap-2"></div>
+                    <!-- Hidden input stores the actual JSON array submitted to PHP -->
+                    <input type="hidden" name="tags" id="tagsHiddenInput" value="<?= htmlspecialchars($form['tags']) ?>">
                 </div>
+
                 <div class="md:col-span-3">
                     <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Redirect Href (Read Full Route)</label>
                     <input type="text" name="redirect_href" value="<?= htmlspecialchars($form['redirect_href']) ?>" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm font-mono focus:border-pingaksh-terracotta outline-none">
@@ -178,11 +201,84 @@ require_once __DIR__ . '/../../includes/header.php';
 
         <div class="flex justify-end gap-3">
             <a href="index.php" class="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</a>
-            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-pingaksh-terracotta px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-pingaksh-terracottaHover">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-pingaksh-terracotta px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-pingaksh-terracottaHover cursor-pointer">
                 <i data-lucide="megaphone" class="h-4 w-4"></i> Publish Announcement
             </button>
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- 1. Auto-Generate Slug from Title ---
+    const titleInput = document.getElementById('titleInput');
+    const slugInput = document.getElementById('slugInput');
+
+    titleInput.addEventListener('input', (e) => {
+        const title = e.target.value;
+        const slug = title.toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+            .replace(/(^-|-$)+/g, '');   // Trim leading/trailing hyphens
+        slugInput.value = slug;
+    });
+
+    // --- 2. Interactive Tags Chips UI ---
+    const tagInput = document.getElementById('tagInput');
+    const addTagBtn = document.getElementById('addTagBtn');
+    const tagsContainer = document.getElementById('tagsContainer');
+    const tagsHiddenInput = document.getElementById('tagsHiddenInput');
+
+    // Parse existing tags from PHP
+    let tags = [];
+    try {
+        tags = JSON.parse(tagsHiddenInput.value || '[]');
+    } catch (e) {
+        tags = [];
+    }
+
+    function renderTags() {
+        tagsContainer.innerHTML = '';
+        tags.forEach((tag, index) => {
+            const span = document.createElement('span');
+            span.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pingaksh-sand/60 border border-pingaksh-sandBorder text-[11px] font-bold text-pingaksh-navy uppercase tracking-wider';
+            span.innerHTML = `
+                ${tag}
+                <button type="button" class="text-pingaksh-terracotta hover:text-red-600 focus:outline-none cursor-pointer" onclick="window.removeTag(${index})">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            `;
+            tagsContainer.appendChild(span);
+        });
+        // Update hidden JSON field for form submission
+        tagsHiddenInput.value = JSON.stringify(tags);
+    }
+
+    function addTag() {
+        const val = tagInput.value.trim();
+        if (val && !tags.includes(val)) {
+            tags.push(val);
+            tagInput.value = '';
+            renderTags();
+        }
+    }
+
+    // Expose remove function to global scope for inline onclick handler
+    window.removeTag = function(index) {
+        tags.splice(index, 1);
+        renderTags();
+    };
+
+    addTagBtn.addEventListener('click', addTag);
+    tagInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent accidental form submission
+            addTag();
+        }
+    });
+
+    // Initial render
+    renderTags();
+});
+</script>
 
 <?php require_once __DIR__ . '/../../includes/footer.php'; ?>
