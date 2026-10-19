@@ -1,360 +1,479 @@
 <?php
 
 require_once __DIR__ . '/../includes/auth.php';
+
 requireLogin();
 
 require_once __DIR__ . '/../config/database.php';
 
-$galleryCount = $pdo
-    ->query("SELECT COUNT(*) FROM gallery_items")
-    ->fetchColumn();
+$pageTitle = 'Dashboard';
+$activeMenu = 'dashboard';
 
+$galleryCount = 0;
 $projectCount = 0;
 $directorCount = 0;
 $announcementCount = 0;
 
 try {
-    $projectCount = $pdo->query("SELECT COUNT(*) FROM projects")->fetchColumn();
+    $galleryCount = (int) $pdo
+        ->query("SELECT COUNT(*) FROM gallery_items")
+        ->fetchColumn();
 } catch (Exception $e) {}
 
 try {
-    $directorCount = $pdo->query("SELECT COUNT(*) FROM directors")->fetchColumn();
+    $projectCount = (int) $pdo
+        ->query("SELECT COUNT(*) FROM projects")
+        ->fetchColumn();
 } catch (Exception $e) {}
 
 try {
-    $announcementCount = $pdo->query("SELECT COUNT(*) FROM announcements")->fetchColumn();
+    $directorCount = (int) $pdo
+        ->query("SELECT COUNT(*) FROM directors")
+        ->fetchColumn();
 } catch (Exception $e) {}
+
+try {
+    $announcementCount = (int) $pdo
+        ->query("SELECT COUNT(*) FROM announcements")
+        ->fetchColumn();
+} catch (Exception $e) {}
+
+require_once __DIR__ . '/../includes/header.php';
 
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
 
-<head>
+<div class="mx-auto max-w-7xl">
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Dashboard - Pingaksh Renewables</title>
+    <!-- Welcome -->
 
-<style>
+    <div class="mb-8">
 
-* {
-    box-sizing: border-box;
-}
+        <p class="mb-2 text-sm font-medium text-blue-600">
+            Overview
+        </p>
 
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #f5f7fb;
-    color: #1f2937;
-}
+        <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 
-/* SIDEBAR */
+            <div>
 
-.sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
+                <h2 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                    Welcome back
+                </h2>
 
-    width: 250px;
+                <p class="mt-1 text-sm text-slate-500">
+                    Manage your Pingaksh Renewables website content from one place.
+                </p>
 
-    background: #071b3a;
-    color: white;
+            </div>
 
-    padding: 25px 15px;
-}
+            <a
+                href="<?= BASE_URL ?>/admin/gallery/create.php"
+                class="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    bg-blue-600
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-semibold
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:bg-blue-700
+                "
+            >
 
-.logo {
-    padding: 0 15px 30px;
-}
+                <i data-lucide="plus" class="h-4 w-4"></i>
 
-.logo h2 {
-    margin: 0;
-    font-size: 20px;
-}
+                Add Media
 
-.logo span {
-    color: #8fb8ef;
-    font-size: 13px;
-}
+            </a>
 
-.menu {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
+        </div>
 
-.menu a {
-    color: #d7e3f5;
-    text-decoration: none;
-
-    padding: 13px 15px;
-    border-radius: 8px;
-
-    font-size: 14px;
-}
-
-.menu a:hover,
-.menu a.active {
-    background: #0d4f97;
-    color: white;
-}
-
-.logout {
-    position: absolute;
-    bottom: 25px;
-    left: 15px;
-    right: 15px;
-}
-
-.logout a {
-    display: block;
-    background: #b91c1c;
-    color: white;
-    text-align: center;
-    padding: 12px;
-    border-radius: 8px;
-    text-decoration: none;
-}
-
-/* MAIN */
-
-.main {
-    margin-left: 250px;
-    padding: 30px;
-}
-
-.topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-
-    margin-bottom: 30px;
-}
-
-.topbar h1 {
-    margin: 0;
-    font-size: 28px;
-}
-
-.user {
-    background: white;
-    padding: 10px 15px;
-    border-radius: 8px;
-}
-
-/* CARDS */
-
-.cards {
-    display: grid;
-
-    grid-template-columns:
-        repeat(4, minmax(0, 1fr));
-
-    gap: 20px;
-}
-
-.card {
-    background: white;
-    padding: 22px;
-    border-radius: 12px;
-
-    box-shadow: 0 3px 15px rgba(0,0,0,.05);
-}
-
-.card p {
-    color: #6b7280;
-    margin: 0 0 10px;
-}
-
-.card h2 {
-    margin: 0;
-    font-size: 30px;
-}
-
-/* QUICK */
-
-.quick {
-    margin-top: 30px;
-
-    background: white;
-    padding: 25px;
-
-    border-radius: 12px;
-}
-
-.quick h2 {
-    margin-top: 0;
-}
-
-.quick-links {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.quick-links a {
-    background: #0b4f9c;
-    color: white;
-
-    text-decoration: none;
-
-    padding: 12px 18px;
-
-    border-radius: 7px;
-}
-
-/* MOBILE */
-
-@media(max-width: 800px) {
-
-    .sidebar {
-        width: 70px;
-    }
-
-    .logo h2,
-    .logo span,
-    .menu a span {
-        display: none;
-    }
-
-    .main {
-        margin-left: 70px;
-    }
-
-    .cards {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-</style>
-
-</head>
-
-<body>
-
-<aside class="sidebar">
-
-    <div class="logo">
-        <h2>Pingaksh</h2>
-        <span>Renewables CMS</span>
     </div>
 
-    <nav class="menu">
 
-  <!-- Sidebar -->
+    <!-- Stats -->
 
-<a href="index.php" class="active">
-    🏠 <span>Dashboard</span>
-</a>
+    <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
 
-<a href="gallery/index.php">
-    🖼️ <span>Gallery</span>
-</a>
 
-<a href="projects/index.php">
-    📁 <span>Projects</span>
-</a>
+        <!-- Gallery -->
 
-<a href="directors/index.php">
-    👤 <span>Directors</span>
-</a>
+        <a
+            href="<?= BASE_URL ?>/admin/gallery/index.php"
+            class="
+                group
+                rounded-2xl
+                border
+                border-slate-200
+                bg-white
+                p-5
+                shadow-sm
+                transition
+                hover:-translate-y-0.5
+                hover:border-blue-200
+                hover:shadow-md
+            "
+        >
 
-<a href="announcements/index.php">
-    📢 <span>Announcements</span>
-</a>
+            <div class="flex items-start justify-between">
 
-<a href="documents/index.php">
-    📄 <span>Documents</span>
-</a>
+                <div
+                    class="
+                        flex
+                        h-11
+                        w-11
+                        items-center
+                        justify-center
+                        rounded-xl
+                        bg-blue-50
+                        text-blue-600
+                    "
+                >
+                    <i data-lucide="images" class="h-5 w-5"></i>
+                </div>
 
-<a href="#">
-    ⚙️ <span>Settings</span>
-</a>
+                <i
+                    data-lucide="arrow-up-right"
+                    class="
+                        h-4
+                        w-4
+                        text-slate-300
+                        transition
+                        group-hover:text-blue-600
+                    "
+                ></i>
 
-<div class="logout">
-    <a href="logout.php">
-        Logout
-    </a>
+            </div>
+
+            <p class="mt-5 text-sm font-medium text-slate-500">
+                Gallery Items
+            </p>
+
+            <p class="mt-1 text-3xl font-bold text-slate-900">
+                <?= $galleryCount ?>
+            </p>
+
+        </a>
+
+
+        <!-- Projects -->
+
+        <div
+            class="
+                rounded-2xl
+                border
+                border-slate-200
+                bg-white
+                p-5
+                shadow-sm
+            "
+        >
+
+            <div
+                class="
+                    flex
+                    h-11
+                    w-11
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-emerald-50
+                    text-emerald-600
+                "
+            >
+                <i data-lucide="folder-kanban" class="h-5 w-5"></i>
+            </div>
+
+            <p class="mt-5 text-sm font-medium text-slate-500">
+                Projects
+            </p>
+
+            <p class="mt-1 text-3xl font-bold text-slate-900">
+                <?= $projectCount ?>
+            </p>
+
+        </div>
+
+
+        <!-- Directors -->
+
+        <div
+            class="
+                rounded-2xl
+                border
+                border-slate-200
+                bg-white
+                p-5
+                shadow-sm
+            "
+        >
+
+            <div
+                class="
+                    flex
+                    h-11
+                    w-11
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-violet-50
+                    text-violet-600
+                "
+            >
+                <i data-lucide="users" class="h-5 w-5"></i>
+            </div>
+
+            <p class="mt-5 text-sm font-medium text-slate-500">
+                Directors
+            </p>
+
+            <p class="mt-1 text-3xl font-bold text-slate-900">
+                <?= $directorCount ?>
+            </p>
+
+        </div>
+
+
+        <!-- Announcements -->
+
+        <div
+            class="
+                rounded-2xl
+                border
+                border-slate-200
+                bg-white
+                p-5
+                shadow-sm
+            "
+        >
+
+            <div
+                class="
+                    flex
+                    h-11
+                    w-11
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-amber-50
+                    text-amber-600
+                "
+            >
+                <i data-lucide="megaphone" class="h-5 w-5"></i>
+            </div>
+
+            <p class="mt-5 text-sm font-medium text-slate-500">
+                Announcements
+            </p>
+
+            <p class="mt-1 text-3xl font-bold text-slate-900">
+                <?= $announcementCount ?>
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <!-- Quick actions -->
+
+    <div
+        class="
+            mt-8
+            rounded-2xl
+            border
+            border-slate-200
+            bg-white
+            p-6
+            shadow-sm
+        "
+    >
+
+        <div class="mb-5">
+
+            <h3 class="text-lg font-bold text-slate-900">
+                Quick actions
+            </h3>
+
+            <p class="mt-1 text-sm text-slate-500">
+                Frequently used content management actions.
+            </p>
+
+        </div>
+
+
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+
+            <a
+                href="<?= BASE_URL ?>/admin/gallery/create.php"
+                class="
+                    group
+                    flex
+                    items-center
+                    gap-4
+                    rounded-xl
+                    border
+                    border-slate-200
+                    p-4
+                    transition
+                    hover:border-blue-200
+                    hover:bg-blue-50/50
+                "
+            >
+
+                <div
+                    class="
+                        flex
+                        h-10
+                        w-10
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-blue-50
+                        text-blue-600
+                    "
+                >
+                    <i data-lucide="image-plus" class="h-5 w-5"></i>
+                </div>
+
+                <div class="flex-1">
+
+                    <p class="text-sm font-semibold text-slate-900">
+                        Add gallery media
+                    </p>
+
+                    <p class="text-xs text-slate-500">
+                        Upload image or video
+                    </p>
+
+                </div>
+
+                <i
+                    data-lucide="chevron-right"
+                    class="h-4 w-4 text-slate-400"
+                ></i>
+
+            </a>
+
+
+            <a
+                href="#"
+                class="
+                    group
+                    flex
+                    items-center
+                    gap-4
+                    rounded-xl
+                    border
+                    border-slate-200
+                    p-4
+                    transition
+                    hover:border-emerald-200
+                    hover:bg-emerald-50/50
+                "
+            >
+
+                <div
+                    class="
+                        flex
+                        h-10
+                        w-10
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-emerald-50
+                        text-emerald-600
+                    "
+                >
+                    <i data-lucide="folder-plus" class="h-5 w-5"></i>
+                </div>
+
+                <div class="flex-1">
+
+                    <p class="text-sm font-semibold text-slate-900">
+                        Add project
+                    </p>
+
+                    <p class="text-xs text-slate-500">
+                        Create project content
+                    </p>
+
+                </div>
+
+                <i
+                    data-lucide="chevron-right"
+                    class="h-4 w-4 text-slate-400"
+                ></i>
+
+            </a>
+
+
+            <a
+                href="#"
+                class="
+                    group
+                    flex
+                    items-center
+                    gap-4
+                    rounded-xl
+                    border
+                    border-slate-200
+                    p-4
+                    transition
+                    hover:border-amber-200
+                    hover:bg-amber-50/50
+                "
+            >
+
+                <div
+                    class="
+                        flex
+                        h-10
+                        w-10
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-amber-50
+                        text-amber-600
+                    "
+                >
+                    <i data-lucide="megaphone" class="h-5 w-5"></i>
+                </div>
+
+                <div class="flex-1">
+
+                    <p class="text-sm font-semibold text-slate-900">
+                        New announcement
+                    </p>
+
+                    <p class="text-xs text-slate-500">
+                        Publish website update
+                    </p>
+
+                </div>
+
+                <i
+                    data-lucide="chevron-right"
+                    class="h-4 w-4 text-slate-400"
+                ></i>
+
+            </a>
+
+        </div>
+
+    </div>
+
+
 </div>
 
-    </nav>
 
-    <div class="logout">
-        <a href="/admin/logout.php">
-            Logout
-        </a>
-    </div>
-
-</aside>
-
-
-<main class="main">
-
-    <div class="topbar">
-
-        <div>
-            <h1>Dashboard</h1>
-            <p>Manage your website content.</p>
-        </div>
-
-        <div class="user">
-            👋 <?= htmlspecialchars($_SESSION['admin_name']) ?>
-        </div>
-
-    </div>
-
-
-    <div class="cards">
-
-        <div class="card">
-            <p>Gallery Items</p>
-            <h2><?= $galleryCount ?></h2>
-        </div>
-
-        <div class="card">
-            <p>Projects</p>
-            <h2><?= $projectCount ?></h2>
-        </div>
-
-        <div class="card">
-            <p>Directors</p>
-            <h2><?= $directorCount ?></h2>
-        </div>
-
-        <div class="card">
-            <p>Announcements</p>
-            <h2><?= $announcementCount ?></h2>
-        </div>
-
-    </div>
-
-
-    <div class="quick">
-
-        <h2>Quick Actions</h2>
-
-        <div class="quick-links">
-
-            <a href="/admin/gallery/create.php">
-                + Add Gallery Media
-            </a>
-
-            <a href="/admin/projects/create.php">
-                + Add Project
-            </a>
-
-            <a href="/admin/announcements/create.php">
-                + Add Announcement
-            </a>
-
-        </div>
-
-    </div>
-
-</main>
-
-</body>
-</html>
+<?php require_once __DIR__ . '/../includes/footer.php'; ?>
