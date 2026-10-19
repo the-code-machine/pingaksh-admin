@@ -160,20 +160,20 @@ $menuItems = [
             </p>
 
             <nav class="space-y-1.5">
-                <?php foreach ($menuItems as $menuItem): ?>
-                    <?php $isActive = $activeMenu === $item['key']; ?>
+           <?php foreach ($menuItems as $menuItem): ?>
+                    <?php $isActive = $activeMenu === $menuItem['key']; ?>
                     <a
-                        href="<?= htmlspecialchars($item['url']) ?>"
+                        href="<?= htmlspecialchars($menuItem['url']) ?>"
                         class="group flex items-center gap-3 rounded-xl px-3.5 py-3 text-sm font-medium transition <?= $isActive
                             ? 'bg-pingaksh-terracotta text-white shadow-lg shadow-black/25 font-semibold'
                             : 'text-pingaksh-sand/80 hover:bg-white/10 hover:text-white'
                         ?>"
                     >
                         <i
-                            data-lucide="<?= htmlspecialchars($item['icon']) ?>"
+                            data-lucide="<?= htmlspecialchars($menuItem['icon']) ?>"
                             class="h-[18px] w-[18px] shrink-0 <?= $isActive ? 'text-pingaksh-sand' : '' ?>"
                         ></i>
-                        <span><?= htmlspecialchars($item['label']) ?></span>
+                        <span><?= htmlspecialchars($menuItem['label']) ?></span>
                     </a>
                 <?php endforeach; ?>
             </nav>
