@@ -160,7 +160,7 @@ $menuItems = [
             </p>
 
             <nav class="space-y-1.5">
-                <?php foreach ($menuItems as $item): ?>
+                <?php foreach ($menuItems as $menuItem): ?>
                     <?php $isActive = $activeMenu === $item['key']; ?>
                     <a
                         href="<?= htmlspecialchars($item['url']) ?>"
