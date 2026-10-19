@@ -19,6 +19,39 @@ if (!$item) die('Project not found.');
 
 $errors = [];
 
+/**
+ * Helper wrapper: Uses projectsUploadFile() from helpers.php if defined,
+ * otherwise falls back to standard image upload into /uploads/projects/
+ */
+function handleProjectImageUpload(array $fileData): ?string {
+    if (empty($fileData) || ($fileData['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if (function_exists('projectsUploadFile')) {
+        return projectsUploadFile($fileData, false);
+    }
+    if ($fileData['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception('File upload error code: ' . $fileData['error']);
+    }
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_file($finfo, $fileData['tmp_name']);
+    finfo_close($finfo);
+
+    if (!isset($allowed[$mime])) {
+        throw new Exception('Invalid image format. Allowed: JPG, PNG, WEBP.');
+    }
+    $uploadDir = __DIR__ . '/../../uploads/projects/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+    $filename = 'proj_' . uniqid('', true) . '.' . $allowed[$mime];
+    if (!move_uploaded_file($fileData['tmp_name'], $uploadDir . $filename)) {
+        throw new Exception('Failed to save uploaded image.');
+    }
+    return '/uploads/projects/' . $filename;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $shortName = trim($_POST['short_name'] ?? '');
@@ -31,6 +64,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($name === '') $errors[] = 'Name is required.';
     if ($slug === '') $errors[] = 'Slug is required.';
+
+    try {
+        // 1. Process Hero Image Upload if a new file was chosen
+        $heroArr = json_decode($_POST['hero_data'] ?? '{}', true) ?: [];
+        if (isset($_FILES['hero_image_file']) && $_FILES['hero_image_file']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $heroPath = handleProjectImageUpload($_FILES['hero_image_file']);
+            if ($heroPath) {
+                $heroArr['heroImage'] = $heroPath;
+            }
+        }
+        $_POST['hero_data'] = json_encode($heroArr);
+
+        // 2. Process Plant Unit Image Uploads if new files were chosen
+        $plantsArr = json_decode($_POST['plant_units'] ?? '[]', true) ?: [];
+        if (isset($_FILES['plant_images']['name']) && is_array($_FILES['plant_images']['name'])) {
+            foreach ($_FILES['plant_images']['name'] as $idx => $fileName) {
+                if ($_FILES['plant_images']['error'][$idx] !== UPLOAD_ERR_NO_FILE) {
+                    $singleFile = [
+                        'name'     => $_FILES['plant_images']['name'][$idx],
+                        'type'     => $_FILES['plant_images']['type'][$idx],
+                        'tmp_name' => $_FILES['plant_images']['tmp_name'][$idx],
+                        'error'    => $_FILES['plant_images']['error'][$idx],
+                        'size'     => $_FILES['plant_images']['size'][$idx],
+                    ];
+                    $plantImgPath = handleProjectImageUpload($singleFile);
+                    if ($plantImgPath && isset($plantsArr[$idx])) {
+                        $plantsArr[$idx]['image'] = $plantImgPath;
+                    }
+                }
+            }
+        }
+        $_POST['plant_units'] = json_encode($plantsArr);
+
+        // 3. Process Media Gallery Image Uploads if new files were chosen
+        $galleryArr = json_decode($_POST['media_gallery_data'] ?? '[]', true) ?: [];
+        if (isset($_FILES['gallery_images']['name']) && is_array($_FILES['gallery_images']['name'])) {
+            foreach ($_FILES['gallery_images']['name'] as $idx => $fileName) {
+                if ($_FILES['gallery_images']['error'][$idx] !== UPLOAD_ERR_NO_FILE) {
+                    $singleFile = [
+                        'name'     => $_FILES['gallery_images']['name'][$idx],
+                        'type'     => $_FILES['gallery_images']['type'][$idx],
+                        'tmp_name' => $_FILES['gallery_images']['tmp_name'][$idx],
+                        'error'    => $_FILES['gallery_images']['error'][$idx],
+                        'size'     => $_FILES['gallery_images']['size'][$idx],
+                    ];
+                    $galImgPath = handleProjectImageUpload($singleFile);
+                    if ($galImgPath && isset($galleryArr[$idx])) {
+                        $galleryArr[$idx]['image'] = $galImgPath;
+                    }
+                }
+            }
+        }
+        $_POST['media_gallery_data'] = json_encode($galleryArr);
+
+    } catch (Exception $e) {
+        $errors[] = 'Image Upload Error: ' . $e->getMessage();
+    }
 
     $validatedJson = [];
     $jsonFields = ['seo_data', 'hero_data', 'overview_data', 'plant_units', 'telemetry_data', 'media_gallery_data', 'timeline_data'];
@@ -96,7 +186,7 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
     <?php endif; ?>
 
-    <form action="edit.php?id=<?= $id ?>" method="POST" class="space-y-6" id="projectForm">
+    <form action="edit.php?id=<?= $id ?>" method="POST" enctype="multipart/form-data" class="space-y-6" id="projectForm">
         <input type="hidden" name="id" value="<?= $id ?>">
 
         <!-- 1. Core Identity -->
@@ -133,7 +223,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <!-- 2. Hero Section & Key Metrics -->
         <section class="rounded-2xl border border-pingaksh-sandBorder/60 bg-white p-6 shadow-sm">
             <h3 class="mb-1 font-bold text-pingaksh-navy">Hero Banner & Key Metrics</h3>
-            <p class="text-xs text-slate-500 mb-5">Configure the top banner presentation and highlight metrics for this vertical.</p>
+            <p class="text-xs text-slate-500 mb-5">Configure the top banner presentation, upload a new hero image (or keep current), and highlight metrics.</p>
             
             <div class="grid gap-5 md:grid-cols-2 mb-6">
                 <div>
@@ -145,11 +235,12 @@ require_once __DIR__ . '/../../includes/header.php';
                     <input type="text" id="hero_subtitle" placeholder="e.g. Harnessing Himalayan river basins sustainably" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
                 </div>
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Hero Image URL / Path</label>
-                    <input type="text" id="hero_image" placeholder="e.g. /images/projects/hydro-hero.jpg" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
+                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Hero Banner Image (Choose File to Replace)</label>
+                    <input type="file" name="hero_image_file" accept="image/jpeg,image/png,image/webp" class="block w-full rounded-xl border border-slate-200 bg-white text-sm file:mr-4 file:border-0 file:bg-pingaksh-sand file:px-4 file:py-2.5 file:font-semibold file:text-pingaksh-navy cursor-pointer">
+                    <div id="hero_current_img_badge" class="mt-1.5 text-xs text-slate-500 hidden"></div>
                 </div>
                 <div>
-                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Hero Image Alt Text</label>
+                    <label class="mb-2 block text-sm font-semibold text-pingaksh-navy">Hero Image Alt Text (SEO)</label>
                     <input type="text" id="hero_image_alt" placeholder="e.g. Dam and hydro turbine facility" class="w-full rounded-xl border border-slate-200 bg-pingaksh-sandLight px-3 py-2.5 text-sm focus:border-pingaksh-terracotta outline-none">
                 </div>
             </div>
@@ -200,12 +291,12 @@ require_once __DIR__ . '/../../includes/header.php';
             <input type="hidden" name="overview_data" id="overview_data_hidden" value="<?= htmlspecialchars($item['overview_data'] ?? '{}') ?>">
         </section>
 
-        <!-- 4. Plant Units (Assets Array) -->
+        <!-- 4. Plant Units (Assets Array with Image Upload) -->
         <section class="rounded-2xl border border-pingaksh-sandBorder/60 bg-white p-6 shadow-sm">
             <div class="flex items-center justify-between mb-6">
                 <div>
                     <h3 class="font-bold text-pingaksh-navy">Plant Units & Infrastructure Assets</h3>
-                    <p class="text-xs text-slate-500">Manage individual power plants, operational units, and their technical specifications.</p>
+                    <p class="text-xs text-slate-500">Manage individual power plants, upload unit photos, and edit technical specifications.</p>
                 </div>
                 <button type="button" onclick="addPlantUnit()" class="text-xs px-3.5 py-2 rounded-xl bg-pingaksh-navy text-pingaksh-sand hover:bg-pingaksh-navyDark transition font-semibold inline-flex items-center gap-1.5 cursor-pointer">
                     <i data-lucide="plus" class="w-4 h-4"></i> Add Plant Unit
@@ -213,6 +304,7 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
 
             <div id="plant_units_container" class="space-y-6"></div>
+            <p id="plant_units_empty" class="text-xs text-slate-400 italic hidden">No plant units added yet. Click "Add Plant Unit" to create one.</p>
             <input type="hidden" name="plant_units" id="plant_units_hidden" value="<?= htmlspecialchars($item['plant_units'] ?? '[]') ?>">
         </section>
 
@@ -220,7 +312,7 @@ require_once __DIR__ . '/../../includes/header.php';
         <section class="rounded-2xl border border-pingaksh-sandBorder/60 bg-white p-6 shadow-sm space-y-8">
             <div>
                 <h3 class="mb-1 font-bold text-pingaksh-navy">Telemetry, Media Gallery & Timeline</h3>
-                <p class="text-xs text-slate-500">Manage operational telemetry metrics, photo gallery items, and historical milestones.</p>
+                <p class="text-xs text-slate-500">Manage operational telemetry metrics, upload gallery photos, and edit historical milestones.</p>
             </div>
 
             <!-- Telemetry Data -->
@@ -238,18 +330,19 @@ require_once __DIR__ . '/../../includes/header.php';
                 <input type="hidden" name="telemetry_data" id="telemetry_data_hidden" value="<?= htmlspecialchars($item['telemetry_data'] ?? '[]') ?>">
             </div>
 
-            <!-- Media Gallery Data -->
+            <!-- Media Gallery Data (With Image Upload) -->
             <div class="border-t border-slate-100 pt-5">
                 <div class="flex items-center justify-between mb-3">
                     <div>
                         <label class="block text-sm font-semibold text-pingaksh-navy">Media Gallery</label>
-                        <p class="text-xs text-slate-400">Site photos and visual assets (Image URL, Alt Text, Caption).</p>
+                        <p class="text-xs text-slate-400">Upload site photos and provide alt text and captions.</p>
                     </div>
                     <button type="button" onclick="addGalleryItem()" class="text-xs font-bold text-pingaksh-terracotta hover:underline inline-flex items-center gap-1">
                         <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Gallery Image
                     </button>
                 </div>
                 <div id="gallery_container" class="space-y-3"></div>
+                <p id="gallery_empty" class="text-xs text-slate-400 italic hidden">No gallery images added. Click + to add.</p>
                 <input type="hidden" name="media_gallery_data" id="media_gallery_data_hidden" value="<?= htmlspecialchars($item['media_gallery_data'] ?? '[]') ?>">
             </div>
 
@@ -324,7 +417,6 @@ require_once __DIR__ . '/../../includes/header.php';
 </div>
 
 <script>
-// --- Safe JSON Parser Helper ---
 function safeParse(jsonStr, fallback) {
     if (!jsonStr || jsonStr.trim() === '') return fallback;
     try {
@@ -335,7 +427,6 @@ function safeParse(jsonStr, fallback) {
     }
 }
 
-// --- Initialize Raw Data from Database Hidden Inputs ---
 const rawSeo = safeParse(document.getElementById('seo_data_hidden').value, {});
 const rawHero = safeParse(document.getElementById('hero_data_hidden').value, {});
 const rawOverview = safeParse(document.getElementById('overview_data_hidden').value, {});
@@ -344,7 +435,6 @@ const rawTelemetry = safeParse(document.getElementById('telemetry_data_hidden').
 const rawGallery = safeParse(document.getElementById('media_gallery_data_hidden').value, []);
 const rawTimeline = safeParse(document.getElementById('timeline_data_hidden').value, []);
 
-// --- Unified Form State ---
 const state = {
     seo: {
         title: rawSeo.title || '',
@@ -364,25 +454,12 @@ const state = {
         bodyParagraph: rawOverview.bodyParagraph || '',
         highlights: Array.isArray(rawOverview.highlights) ? rawOverview.highlights : []
     },
-    plantUnits: Array.isArray(rawPlants) ? rawPlants.map((p, i) => ({
-        id: p.id || `plant-${i + 1}`,
-        name: p.name || '',
-        location: p.location || '',
-        status: p.status || 'Operational',
-        capacity: p.capacity || '',
-        summary: p.summary || '',
-        image: p.image || '',
-        imageAlt: p.imageAlt || '',
-        technicalSpecs: Array.isArray(p.technicalSpecs) ? p.technicalSpecs : []
-    })) : [],
     telemetry: Array.isArray(rawTelemetry) ? rawTelemetry : (Array.isArray(rawTelemetry.metrics) ? rawTelemetry.metrics : []),
-    gallery: Array.isArray(rawGallery) ? rawGallery : (Array.isArray(rawGallery.images) ? rawGallery.images : []),
     timeline: Array.isArray(rawTimeline) ? rawTimeline : (Array.isArray(rawTimeline.milestones) ? rawTimeline.milestones : [])
 };
 
 const TRASH_ICON = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
 
-// --- Bind Static Object Inputs ---
 function bindStaticInputs() {
     // SEO
     const seoTitle = document.getElementById('seo_title');
@@ -395,15 +472,17 @@ function bindStaticInputs() {
     // Hero
     const heroTitle = document.getElementById('hero_title');
     const heroSub = document.getElementById('hero_subtitle');
-    const heroImg = document.getElementById('hero_image');
     const heroAlt = document.getElementById('hero_image_alt');
+    const heroBadge = document.getElementById('hero_current_img_badge');
     heroTitle.value = state.hero.title;
     heroSub.value = state.hero.subtitle;
-    heroImg.value = state.hero.heroImage;
     heroAlt.value = state.hero.heroImageAlt;
+    if (state.hero.heroImage) {
+        heroBadge.classList.remove('hidden');
+        heroBadge.innerHTML = `Current Saved Image: <span class="font-mono text-pingaksh-navy">${state.hero.heroImage}</span>`;
+    }
     heroTitle.addEventListener('input', e => { state.hero.title = e.target.value; syncAllToHidden(); });
     heroSub.addEventListener('input', e => { state.hero.subtitle = e.target.value; syncAllToHidden(); });
-    heroImg.addEventListener('input', e => { state.hero.heroImage = e.target.value; syncAllToHidden(); });
     heroAlt.addEventListener('input', e => { state.hero.heroImageAlt = e.target.value; syncAllToHidden(); });
 
     // Overview
@@ -418,7 +497,7 @@ function bindStaticInputs() {
     ovBody.addEventListener('input', e => { state.overview.bodyParagraph = e.target.value; syncAllToHidden(); });
 }
 
-// --- 1. Render SEO Keywords ---
+// --- 1. SEO Keywords ---
 function renderSeoKeywords() {
     const container = document.getElementById('seo_keywords_container');
     container.innerHTML = '';
@@ -452,7 +531,7 @@ window.addSeoKeyword = function() {
     syncAllToHidden();
 };
 
-// --- 2. Render Hero Key Metrics ---
+// --- 2. Hero Key Metrics ---
 function renderHeroMetrics() {
     const container = document.getElementById('hero_metrics_container');
     container.innerHTML = '';
@@ -501,7 +580,7 @@ window.addHeroMetric = function() {
     syncAllToHidden();
 };
 
-// --- 3. Render Overview Highlights ---
+// --- 3. Overview Highlights ---
 function renderOverviewHighlights() {
     const container = document.getElementById('overview_highlights_container');
     container.innerHTML = '';
@@ -526,7 +605,7 @@ function renderOverviewHighlights() {
         const detailIn = document.createElement('input');
         detailIn.type = 'text';
         detailIn.className = 'md:col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta';
-        detailIn.placeholder = 'Detail description (e.g. Snow-fed perennial river ensures year-round generation)';
+        detailIn.placeholder = 'Detail description';
         detailIn.value = h.detail || '';
         detailIn.addEventListener('input', e => { state.overview.highlights[idx].detail = e.target.value; syncAllToHidden(); });
 
@@ -548,148 +627,164 @@ window.addOverviewHighlight = function() {
     syncAllToHidden();
 };
 
-// --- 4. Render Plant Units (With Nested Technical Specs) ---
-function renderPlantUnits() {
+// --- 4. Plant Units (DOM-Preserving Builder so File Inputs Never Reset) ---
+function updatePlantUnitsEmptyState() {
     const container = document.getElementById('plant_units_container');
-    container.innerHTML = '';
-    if (state.plantUnits.length === 0) {
-        container.innerHTML = `<p class="text-xs text-slate-400 italic">No plant units added yet. Click "Add Plant Unit" to create one.</p>`;
-        return;
-    }
-
-    state.plantUnits.forEach((plant, pIdx) => {
-        const card = document.createElement('div');
-        card.className = 'rounded-2xl border border-slate-200 bg-slate-50/70 p-5 space-y-4';
-
-        // Header bar
-        const header = document.createElement('div');
-        header.className = 'flex items-center justify-between border-b border-slate-200 pb-3';
-        header.innerHTML = `<span class="text-sm font-bold text-pingaksh-navy">Plant Unit #${pIdx + 1}</span>`;
-        const delBtn = document.createElement('button');
-        delBtn.type = 'button';
-        delBtn.className = 'text-xs font-semibold text-red-600 hover:text-red-800 inline-flex items-center gap-1 cursor-pointer';
-        delBtn.innerHTML = `${TRASH_ICON} Remove Unit`;
-        delBtn.onclick = () => { state.plantUnits.splice(pIdx, 1); renderPlantUnits(); syncAllToHidden(); };
-        header.appendChild(delBtn);
-
-        // Fields Grid
-        const grid = document.createElement('div');
-        grid.className = 'grid gap-4 md:grid-cols-3';
-
-        const createField = (label, key, placeholder, colSpan = '') => {
-            const wrap = document.createElement('div');
-            if (colSpan) wrap.className = colSpan;
-            wrap.innerHTML = `<label class="mb-1 block text-xs font-semibold text-slate-600">${label}</label>`;
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta';
-            input.placeholder = placeholder;
-            input.value = plant[key] || '';
-            input.addEventListener('input', e => { state.plantUnits[pIdx][key] = e.target.value; syncAllToHidden(); });
-            wrap.appendChild(input);
-            return wrap;
-        };
-
-        grid.append(
-            createField('Unit ID', 'id', 'e.g. plant-1'),
-            createField('Plant Name', 'name', 'e.g. SHP-I Bageshwar'),
-            createField('Location', 'location', 'e.g. Uttarakhand, India'),
-            createField('Status', 'status', 'e.g. Operational / Under Construction'),
-            createField('Capacity', 'capacity', 'e.g. 12.5 MW'),
-            createField('Image URL', 'image', 'e.g. /images/plants/unit1.jpg'),
-            createField('Image Alt Text', 'imageAlt', 'e.g. Turbine hall interior', 'md:col-span-3')
-        );
-
-        // Summary Textarea
-        const sumWrap = document.createElement('div');
-        sumWrap.innerHTML = `<label class="mb-1 block text-xs font-semibold text-slate-600">Unit Summary</label>`;
-        const sumArea = document.createElement('textarea');
-        sumArea.rows = 2;
-        sumArea.className = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta';
-        sumArea.placeholder = 'Brief operational summary of this plant unit...';
-        sumArea.value = plant.summary || '';
-        sumArea.addEventListener('input', e => { state.plantUnits[pIdx].summary = e.target.value; syncAllToHidden(); });
-        sumWrap.appendChild(sumArea);
-
-        // Nested Technical Specs
-        const specsWrap = document.createElement('div');
-        specsWrap.className = 'rounded-xl bg-white p-4 border border-slate-200/80';
-        const specsHeader = document.createElement('div');
-        specsHeader.className = 'flex items-center justify-between mb-3';
-        specsHeader.innerHTML = `<span class="text-xs font-bold uppercase tracking-wider text-pingaksh-navy">Technical Specifications</span>`;
-        const addSpecBtn = document.createElement('button');
-        addSpecBtn.type = 'button';
-        addSpecBtn.className = 'text-xs font-bold text-pingaksh-terracotta hover:underline cursor-pointer';
-        addSpecBtn.textContent = '+ Add Spec Row';
-        addSpecBtn.onclick = () => {
-            state.plantUnits[pIdx].technicalSpecs.push({ parameter: '', specification: '' });
-            renderPlantUnits();
-            syncAllToHidden();
-        };
-        specsHeader.appendChild(addSpecBtn);
-        specsWrap.appendChild(specsHeader);
-
-        const specsList = document.createElement('div');
-        specsList.className = 'space-y-2';
-        if (!plant.technicalSpecs || plant.technicalSpecs.length === 0) {
-            specsList.innerHTML = `<p class="text-xs text-slate-400 italic">No technical specs added.</p>`;
-        } else {
-            plant.technicalSpecs.forEach((spec, sIdx) => {
-                const sRow = document.createElement('div');
-                sRow.className = 'flex items-center gap-2';
-
-                const paramIn = document.createElement('input');
-                paramIn.type = 'text';
-                paramIn.className = 'flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-pingaksh-terracotta';
-                paramIn.placeholder = 'Parameter (e.g. Turbine Type)';
-                paramIn.value = spec.parameter || '';
-                paramIn.addEventListener('input', e => {
-                    state.plantUnits[pIdx].technicalSpecs[sIdx].parameter = e.target.value;
-                    syncAllToHidden();
-                });
-
-                const valIn = document.createElement('input');
-                valIn.type = 'text';
-                valIn.className = 'flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-pingaksh-terracotta';
-                valIn.placeholder = 'Specification (e.g. Horizontal Francis)';
-                valIn.value = spec.specification || '';
-                valIn.addEventListener('input', e => {
-                    state.plantUnits[pIdx].technicalSpecs[sIdx].specification = e.target.value;
-                    syncAllToHidden();
-                });
-
-                const sDel = document.createElement('button');
-                sDel.type = 'button';
-                sDel.className = 'p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 cursor-pointer';
-                sDel.innerHTML = TRASH_ICON;
-                sDel.onclick = () => {
-                    state.plantUnits[pIdx].technicalSpecs.splice(sIdx, 1);
-                    renderPlantUnits();
-                    syncAllToHidden();
-                };
-
-                sRow.append(paramIn, valIn, sDel);
-                specsList.appendChild(sRow);
-            });
-        }
-        specsWrap.appendChild(specsList);
-
-        card.append(header, grid, sumWrap, specsWrap);
-        container.appendChild(card);
+    const emptyMsg = document.getElementById('plant_units_empty');
+    const cards = container.querySelectorAll('.plant-unit-card');
+    emptyMsg.classList.toggle('hidden', cards.length > 0);
+    cards.forEach((card, idx) => {
+        card.querySelector('.plant-unit-title').textContent = `Plant Unit #${idx + 1}`;
     });
 }
-window.addPlantUnit = function() {
-    const nextNum = state.plantUnits.length + 1;
-    state.plantUnits.push({
-        id: `plant-${nextNum}`,
-        name: '', location: '', status: 'Operational', capacity: '', summary: '', image: '', imageAlt: '',
+
+function createSpecRowElement(spec = { parameter: '', specification: '' }) {
+    const sRow = document.createElement('div');
+    sRow.className = 'spec-row flex items-center gap-2';
+
+    const paramIn = document.createElement('input');
+    paramIn.type = 'text';
+    paramIn.className = 'spec-param flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-pingaksh-terracotta';
+    paramIn.placeholder = 'Parameter (e.g. Turbine Type)';
+    paramIn.value = spec.parameter || '';
+    paramIn.addEventListener('input', syncAllToHidden);
+
+    const valIn = document.createElement('input');
+    valIn.type = 'text';
+    valIn.className = 'spec-val flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-pingaksh-terracotta';
+    valIn.placeholder = 'Specification (e.g. Horizontal Francis)';
+    valIn.value = spec.specification || '';
+    valIn.addEventListener('input', syncAllToHidden);
+
+    const sDel = document.createElement('button');
+    sDel.type = 'button';
+    sDel.className = 'p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 cursor-pointer';
+    sDel.innerHTML = TRASH_ICON;
+    sDel.onclick = () => {
+        sRow.remove();
+        syncAllToHidden();
+    };
+
+    sRow.append(paramIn, valIn, sDel);
+    return sRow;
+}
+
+window.addPlantUnit = function(plantData = null) {
+    const container = document.getElementById('plant_units_container');
+    const nextNum = container.querySelectorAll('.plant-unit-card').length + 1;
+    const p = plantData || {
+        id: `plant-${nextNum}`, name: '', location: '', status: 'Operational',
+        capacity: '', summary: '', image: '', imageAlt: '',
         technicalSpecs: [{ parameter: '', specification: '' }]
-    });
-    renderPlantUnits();
+    };
+
+    const card = document.createElement('div');
+    card.className = 'plant-unit-card rounded-2xl border border-slate-200 bg-slate-50/70 p-5 space-y-4';
+    card.dataset.existingImage = p.image || '';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'flex items-center justify-between border-b border-slate-200 pb-3';
+    header.innerHTML = `<span class="plant-unit-title text-sm font-bold text-pingaksh-navy">Plant Unit #${nextNum}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'text-xs font-semibold text-red-600 hover:text-red-800 inline-flex items-center gap-1 cursor-pointer';
+    delBtn.innerHTML = `${TRASH_ICON} Remove Unit`;
+    delBtn.onclick = () => {
+        card.remove();
+        updatePlantUnitsEmptyState();
+        syncAllToHidden();
+    };
+    header.appendChild(delBtn);
+
+    // Grid Fields
+    const grid = document.createElement('div');
+    grid.className = 'grid gap-4 md:grid-cols-3';
+
+    const makeInput = (label, cls, placeholder, val, colSpan = '') => {
+        const wrap = document.createElement('div');
+        if (colSpan) wrap.className = colSpan;
+        wrap.innerHTML = `<label class="mb-1 block text-xs font-semibold text-slate-600">${label}</label>`;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = `${cls} w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta`;
+        input.placeholder = placeholder;
+        input.value = val || '';
+        input.addEventListener('input', syncAllToHidden);
+        wrap.appendChild(input);
+        return wrap;
+    };
+
+    // File Upload Field for Plant Image
+    const fileWrap = document.createElement('div');
+    fileWrap.className = 'md:col-span-2';
+    fileWrap.innerHTML = `<label class="mb-1 block text-xs font-semibold text-slate-600">Plant Unit Image (Choose File to Upload / Replace)</label>`;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.name = 'plant_images[]';
+    fileInput.accept = 'image/jpeg,image/png,image/webp';
+    fileInput.className = 'block w-full rounded-lg border border-slate-200 bg-white text-xs file:mr-3 file:border-0 file:bg-pingaksh-sand file:px-3 file:py-2 file:font-semibold file:text-pingaksh-navy cursor-pointer';
+    fileWrap.appendChild(fileInput);
+    if (p.image) {
+        const badge = document.createElement('div');
+        badge.className = 'mt-1 text-xs text-slate-500';
+        badge.innerHTML = `Current Saved Image: <span class="font-mono text-pingaksh-navy">${p.image}</span>`;
+        fileWrap.appendChild(badge);
+    }
+
+    grid.append(
+        makeInput('Unit ID', 'plant-id', 'e.g. plant-1', p.id),
+        makeInput('Plant Name', 'plant-name', 'e.g. SHP-I Bageshwar', p.name),
+        makeInput('Location', 'plant-location', 'e.g. Uttarakhand, India', p.location),
+        makeInput('Status', 'plant-status', 'e.g. Operational', p.status),
+        makeInput('Capacity', 'plant-capacity', 'e.g. 12.5 MW', p.capacity),
+        makeInput('Image Alt Text', 'plant-image-alt', 'e.g. Turbine hall interior', p.imageAlt),
+        fileWrap
+    );
+
+    // Summary
+    const sumWrap = document.createElement('div');
+    sumWrap.innerHTML = `<label class="mb-1 block text-xs font-semibold text-slate-600">Unit Summary</label>`;
+    const sumArea = document.createElement('textarea');
+    sumArea.rows = 2;
+    sumArea.className = 'plant-summary w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta';
+    sumArea.placeholder = 'Brief operational summary of this plant unit...';
+    sumArea.value = p.summary || '';
+    sumArea.addEventListener('input', syncAllToHidden);
+    sumWrap.appendChild(sumArea);
+
+    // Technical Specs
+    const specsWrap = document.createElement('div');
+    specsWrap.className = 'rounded-xl bg-white p-4 border border-slate-200/80';
+    const specsHeader = document.createElement('div');
+    specsHeader.className = 'flex items-center justify-between mb-3';
+    specsHeader.innerHTML = `<span class="text-xs font-bold uppercase tracking-wider text-pingaksh-navy">Technical Specifications</span>`;
+
+    const specsList = document.createElement('div');
+    specsList.className = 'specs-list space-y-2';
+
+    const addSpecBtn = document.createElement('button');
+    addSpecBtn.type = 'button';
+    addSpecBtn.className = 'text-xs font-bold text-pingaksh-terracotta hover:underline cursor-pointer';
+    addSpecBtn.textContent = '+ Add Spec Row';
+    addSpecBtn.onclick = () => {
+        specsList.appendChild(createSpecRowElement());
+        syncAllToHidden();
+    };
+    specsHeader.appendChild(addSpecBtn);
+
+    const specsArr = Array.isArray(p.technicalSpecs) ? p.technicalSpecs : [];
+    specsArr.forEach(s => specsList.appendChild(createSpecRowElement(s)));
+
+    specsWrap.append(specsHeader, specsList);
+    card.append(header, grid, sumWrap, specsWrap);
+    container.appendChild(card);
+
+    updatePlantUnitsEmptyState();
     syncAllToHidden();
 };
 
-// --- 5. Render Telemetry ---
+// --- 5. Telemetry ---
 function renderTelemetry() {
     const container = document.getElementById('telemetry_container');
     container.innerHTML = '';
@@ -733,50 +828,69 @@ window.addTelemetryItem = function() {
     syncAllToHidden();
 };
 
-// --- 6. Render Media Gallery ---
-function renderGallery() {
+// --- 6. Media Gallery (DOM-Preserving Builder for File Inputs) ---
+function updateGalleryEmptyState() {
     const container = document.getElementById('gallery_container');
-    container.innerHTML = '';
-    if (state.gallery.length === 0) {
-        container.innerHTML = `<p class="text-xs text-slate-400 italic">No gallery images added. Click + to add.</p>`;
-        return;
-    }
-    state.gallery.forEach((g, idx) => {
-        const div = document.createElement('div');
-        div.className = 'grid grid-cols-1 md:grid-cols-10 gap-2 items-center p-3 rounded-xl border border-slate-200 bg-slate-50/60';
-
-        const createIn = (colClass, placeholder, key) => {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = `${colClass} rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta`;
-            input.placeholder = placeholder;
-            input.value = g[key] || '';
-            input.addEventListener('input', e => { state.gallery[idx][key] = e.target.value; syncAllToHidden(); });
-            return input;
-        };
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'md:col-span-1 flex justify-center p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 cursor-pointer';
-        btn.innerHTML = TRASH_ICON;
-        btn.onclick = () => { state.gallery.splice(idx, 1); renderGallery(); syncAllToHidden(); };
-
-        div.append(
-            createIn('md:col-span-4', 'Image URL (e.g. /images/gallery/1.jpg)', 'image'),
-            createIn('md:col-span-2', 'Alt Text', 'alt'),
-            createIn('md:col-span-3', 'Caption', 'caption'),
-            btn
-        );
-        container.appendChild(div);
-    });
+    const emptyMsg = document.getElementById('gallery_empty');
+    emptyMsg.classList.toggle('hidden', container.querySelectorAll('.gallery-item-row').length > 0);
 }
-window.addGalleryItem = function() {
-    state.gallery.push({ image: '', alt: '', caption: '' });
-    renderGallery();
+
+window.addGalleryItem = function(galData = null) {
+    const container = document.getElementById('gallery_container');
+    const g = galData || { image: '', alt: '', caption: '' };
+
+    const row = document.createElement('div');
+    row.className = 'gallery-item-row grid grid-cols-1 md:grid-cols-10 gap-3 items-start p-3.5 rounded-xl border border-slate-200 bg-slate-50/60';
+    row.dataset.existingImage = g.image || '';
+
+    // File input column
+    const fileCol = document.createElement('div');
+    fileCol.className = 'md:col-span-4';
+    const fileIn = document.createElement('input');
+    fileIn.type = 'file';
+    fileIn.name = 'gallery_images[]';
+    fileIn.accept = 'image/jpeg,image/png,image/webp';
+    fileIn.className = 'block w-full rounded-lg border border-slate-200 bg-white text-xs file:mr-3 file:border-0 file:bg-pingaksh-sand file:px-3 file:py-2 file:font-semibold file:text-pingaksh-navy cursor-pointer';
+    fileCol.appendChild(fileIn);
+
+    if (g.image) {
+        const badge = document.createElement('div');
+        badge.className = 'mt-1 text-xs text-slate-500 truncate';
+        badge.innerHTML = `Saved: <span class="font-mono text-pingaksh-navy">${g.image}</span>`;
+        fileCol.appendChild(badge);
+    }
+
+    const altIn = document.createElement('input');
+    altIn.type = 'text';
+    altIn.className = 'gallery-alt md:col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta';
+    altIn.placeholder = 'Alt Text';
+    altIn.value = g.alt || '';
+    altIn.addEventListener('input', syncAllToHidden);
+
+    const capIn = document.createElement('input');
+    capIn.type = 'text';
+    capIn.className = 'gallery-caption md:col-span-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-pingaksh-terracotta';
+    capIn.placeholder = 'Caption';
+    capIn.value = g.caption || '';
+    capIn.addEventListener('input', syncAllToHidden);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'md:col-span-1 flex justify-center p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 cursor-pointer';
+    btn.innerHTML = TRASH_ICON;
+    btn.onclick = () => {
+        row.remove();
+        updateGalleryEmptyState();
+        syncAllToHidden();
+    };
+
+    row.append(fileCol, altIn, capIn, btn);
+    container.appendChild(row);
+    updateGalleryEmptyState();
     syncAllToHidden();
 };
 
-// --- 7. Render Timeline ---
+// --- 7. Timeline ---
 function renderTimeline() {
     const container = document.getElementById('timeline_container');
     container.innerHTML = '';
@@ -819,14 +933,47 @@ window.addTimelineItem = function() {
     syncAllToHidden();
 };
 
-// --- Sync State to Hidden JSON Inputs ---
+// --- Collect DOM & State into Hidden Inputs ---
 function syncAllToHidden() {
+    // Collect Plant Units from DOM
+    const plantUnitsData = [];
+    document.querySelectorAll('#plant_units_container .plant-unit-card').forEach(card => {
+        const specs = [];
+        card.querySelectorAll('.specs-list .spec-row').forEach(sRow => {
+            specs.push({
+                parameter: sRow.querySelector('.spec-param').value,
+                specification: sRow.querySelector('.spec-val').value
+            });
+        });
+        plantUnitsData.push({
+            id: card.querySelector('.plant-id').value,
+            name: card.querySelector('.plant-name').value,
+            location: card.querySelector('.plant-location').value,
+            status: card.querySelector('.plant-status').value,
+            capacity: card.querySelector('.plant-capacity').value,
+            summary: card.querySelector('.plant-summary').value,
+            image: card.dataset.existingImage || '',
+            imageAlt: card.querySelector('.plant-image-alt').value,
+            technicalSpecs: specs
+        });
+    });
+
+    // Collect Gallery from DOM
+    const galleryData = [];
+    document.querySelectorAll('#gallery_container .gallery-item-row').forEach(row => {
+        galleryData.push({
+            image: row.dataset.existingImage || '',
+            alt: row.querySelector('.gallery-alt').value,
+            caption: row.querySelector('.gallery-caption').value
+        });
+    });
+
     document.getElementById('seo_data_hidden').value = JSON.stringify(state.seo);
     document.getElementById('hero_data_hidden').value = JSON.stringify(state.hero);
     document.getElementById('overview_data_hidden').value = JSON.stringify(state.overview);
-    document.getElementById('plant_units_hidden').value = JSON.stringify(state.plantUnits);
+    document.getElementById('plant_units_hidden').value = JSON.stringify(plantUnitsData);
     document.getElementById('telemetry_data_hidden').value = JSON.stringify(state.telemetry);
-    document.getElementById('media_gallery_data_hidden').value = JSON.stringify(state.gallery);
+    document.getElementById('media_gallery_data_hidden').value = JSON.stringify(galleryData);
     document.getElementById('timeline_data_hidden').value = JSON.stringify(state.timeline);
 }
 
@@ -843,10 +990,19 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSeoKeywords();
     renderHeroMetrics();
     renderOverviewHighlights();
-    renderPlantUnits();
     renderTelemetry();
-    renderGallery();
     renderTimeline();
+
+    // Populate initial Plant Units
+    const initialPlants = Array.isArray(rawPlants) ? rawPlants : [];
+    if (initialPlants.length === 0) updatePlantUnitsEmptyState();
+    else initialPlants.forEach(p => addPlantUnit(p));
+
+    // Populate initial Gallery Items
+    const initialGallery = Array.isArray(rawGallery) ? rawGallery : (Array.isArray(rawGallery.images) ? rawGallery.images : []);
+    if (initialGallery.length === 0) updateGalleryEmptyState();
+    else initialGallery.forEach(g => addGalleryItem(g));
+
     syncAllToHidden();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 });
