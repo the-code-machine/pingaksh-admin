@@ -128,9 +128,11 @@ require_once __DIR__ . '/../../includes/header.php';
     const fileInput = document.getElementById('fileInput');
     const fileList = document.getElementById('fileList');
 
+// Find this block at the bottom of create.php:
     typeSelect.addEventListener('change', (e) => {
         if (e.target.value === 'video') {
-            helpText.textContent = "Max size: 150MB per video. MP4, WebM, MOV.";
+            // Update the text from 150MB to 1GB:
+            helpText.textContent = "Max size: 1GB per video. MP4, WebM, MOV.";
             fileInput.accept = "video/mp4,video/webm,video/quicktime";
         } else {
             helpText.textContent = "Max size: 15MB per image. JPG, PNG, WebP, SVG.";

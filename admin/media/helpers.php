@@ -47,7 +47,7 @@ function mediaProcessSingleFile(array $file, string $expectedType): array
         throw new RuntimeException('File upload failed for ' . $file['name'] . ' (Code: ' . $file['error'] . ').');
     }
 
-    $maxSize = $expectedType === 'video' ? 150 * 1024 * 1024 : 15 * 1024 * 1024;
+    $maxSize = $expectedType === 'video' ? 1024 * 1024 * 1024 : 15 * 1024 * 1024;
     if ($file['size'] > $maxSize) {
         throw new RuntimeException("File {$file['name']} exceeds size limit.");
     }
