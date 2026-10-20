@@ -48,6 +48,12 @@ $menuItems = [
     //     'url' => '#',
     //     'icon' => 'settings'
     // ],
+    [
+        'key' => 'media',
+        'label' => 'Media Manager',
+        'url' => BASE_URL . '/admin/media/index.php',
+        'icon' => 'folder-open'
+    ],
 ];
 
 ?>
