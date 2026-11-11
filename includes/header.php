@@ -54,6 +54,18 @@ $menuItems = [
         'url' => BASE_URL . '/admin/media/index.php',
         'icon' => 'folder-open'
     ],
+    [
+        'key' => 'contacts',
+        'label' => 'Contact Inquiries',
+        'url' => BASE_URL . '/admin/contacts/index.php',
+        'icon' => 'mail'
+    ],
+    [
+        'key' => 'vendors',
+        'label' => 'Vendor KYC',
+        'url' => BASE_URL . '/admin/vendors/index.php',
+        'icon' => 'shield-check'
+    ],
 ];
 
 ?>
