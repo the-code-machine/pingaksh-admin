@@ -1,7 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../../includes/auth.php';
-requireLogin();
+requireRole(['super_admin']);
 require_once __DIR__ . '/../../config/database.php';
 
 $pageTitle = 'Contact Inquiries';$activeMenu = 'contacts';
