@@ -15,22 +15,70 @@ $userRole = $_SESSION['role'] ?? 'super_admin';
 
 $menuItems = [];
 
-// Super Admins see everything
 if ($userRole === 'super_admin') {
     $menuItems = [
-        ['key' => 'dashboard', 'label' => 'Dashboard', 'url' => BASE_URL . '/admin/dashboard.php', 'icon' => 'layout-dashboard'],
-        ['key' => 'gallery', 'label' => 'Gallery', 'url' => BASE_URL . '/admin/gallery/index.php', 'icon' => 'image'],
-        ['key' => 'contacts', 'label' => 'Contact Inquiries', 'url' => BASE_URL . '/admin/contacts/index.php', 'icon' => 'mail'],
-        ['key' => 'vendors', 'label' => 'Vendor KYC', 'url' => BASE_URL . '/admin/vendors/index.php', 'icon' => 'shield-check'],
-        ['key' => 'media', 'label' => 'Media Manager', 'url' => BASE_URL . '/admin/media/index.php', 'icon' => 'folder-open'],
+        [
+            'key' => 'dashboard',
+            'label' => 'Dashboard',
+            'url' => BASE_URL . '/admin/index.php',
+            'icon' => 'layout-grid'
+        ],
+        [
+            'key' => 'gallery',
+            'label' => 'Gallery',
+            'url' => BASE_URL . '/admin/gallery/index.php',
+            'icon' => 'image'
+        ],
+        [
+            'key' => 'projects',
+            'label' => 'Projects',
+            'url' => BASE_URL . '/admin/projects/index.php',
+            'icon' => 'building-2'
+        ],
+        [
+            'key' => 'directors',
+            'label' => 'Directors',
+            'url' => BASE_URL . '/admin/directors/index.php',
+            'icon' => 'users'
+        ],
+        [
+            'key' => 'announcements',
+            'label' => 'Announcements',
+            'url' => BASE_URL . '/admin/announcements/index.php',
+            'icon' => 'megaphone'
+        ],
+        [
+            'key' => 'documents',
+            'label' => 'Documents',
+            'url' => BASE_URL . '/admin/documents/index.php',
+            'icon' => 'file-text'
+        ],
+        [
+            'key' => 'media',
+            'label' => 'Media Manager',
+            'url' => BASE_URL . '/admin/media/index.php',
+            'icon' => 'folder-open'
+        ],
+        [
+            'key' => 'contacts',
+            'label' => 'Contact Inquiries',
+            'url' => BASE_URL . '/admin/contacts/index.php',
+            'icon' => 'mail'
+        ],
+        [
+            'key' => 'vendors',
+            'label' => 'Vendor KYC',
+            'url' => BASE_URL . '/admin/vendors/index.php',
+            'icon' => 'shield-check'
+        ],
     ];
 }
 
-// BOTH Super Admins and Carbon Editors see the Carbon Dashboard
+// Visible to BOTH super_admin and carbon_editor
 $menuItems[] = [
-    'key' => 'carbon', 
-    'label' => 'Carbon Telemetry', 
-    'url' => BASE_URL . '/admin/carbon/index.php', 
+    'key' => 'carbon',
+    'label' => 'Carbon Telemetry',
+    'url' => BASE_URL . '/admin/carbon/index.php',
     'icon' => 'leaf'
 ];
 
