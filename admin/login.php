@@ -2,8 +2,13 @@
 
 session_start();
 
+// If already logged in, route them to their respective dashboards
 if (!empty($_SESSION['admin_id'])) {
-    header("Location: index.php");
+    if (isset($_SESSION['role']) && $_SESSION['role'] === 'carbon_editor') {
+        header("Location: carbon/index.php");
+    } else {
+        header("Location: index.php");
+    }
     exit;
 }
 
@@ -13,17 +18,18 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    $email = trim($_POST['email'] ?? '');
+    $login_id = trim($_POST['login_id'] ?? '');
     $password = $_POST['password'] ?? '';
 
+    // Check for matching email OR name (username) in case the team member doesn't use an email format
     $stmt = $pdo->prepare("
         SELECT id, name, email, password_hash, role
         FROM users
-        WHERE email = ? AND is_active = 1
+        WHERE (email = ? OR name = ?) AND is_active = 1
         LIMIT 1
     ");
 
-    $stmt->execute([$email]);
+    $stmt->execute([$login_id, $login_id]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password_hash'])) {
@@ -32,13 +38,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $_SESSION['admin_id'] = $user['id'];
         $_SESSION['admin_name'] = $user['name'];
-        $_SESSION['admin_role'] = $user['role'];
+        
+        // Ensure both session keys are set so auth.php and header.php work perfectly
+        $_SESSION['admin_role'] = $user['role']; 
+        $_SESSION['role'] = $user['role']; 
 
-        header("Location: index.php");
+        // Route team members directly to their restricted module
+        if ($user['role'] === 'carbon_editor') {
+            header("Location: carbon/index.php");
+        } else {
+            header("Location: index.php");
+        }
         exit;
     }
 
-    $error = "Invalid email or password.";
+    $error = "Invalid credentials or inactive account.";
 }
 ?>
 
@@ -47,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login - Pingaksh Renewables</title>
+    <title>Portal Login - Pingaksh Renewables</title>
 
     <style>
         * {
@@ -139,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <div class="logo">
         <h1>Pingaksh Renewables</h1>
-        <p>Content Management System</p>
+        <p>Enterprise CMS & Telemetry Portal</p>
     </div>
 
     <?php if ($error): ?>
@@ -150,11 +164,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <form method="POST">
 
-        <label>Email</label>
+        <label>Email or Username</label>
         <input
-            type="email"
-            name="email"
-            placeholder="admin@example.com"
+            type="text"
+            name="login_id"
+            placeholder="admin@example.com or carbon_team"
             required
         >
 
