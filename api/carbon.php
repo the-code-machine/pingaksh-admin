@@ -1,4 +1,5 @@
 <?php
+
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
@@ -12,46 +13,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 try {
-    $stmt = $pdo->query("SELECT * FROM carbon_metrics WHERE status = 'active' ORDER BY created_at ASC");
-    $metrics = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // 1. Sum Ethanol Sales (Sheet 1)
+    $ethanolLitres = (float)$pdo->query("SELECT COALESCE(SUM(litres_sold), 0) FROM ethanol_sales_log")->fetchColumn();
 
-    $nowTimestamp = time();
-    $serverTimeIso = gmdate('Y-m-d\TH:i:s\Z', $nowTimestamp); // UTC
-    
-    $responseData = [];
-
-    foreach ($metrics as $m) {
-        $baseTime = strtotime($m['base_timestamp']);
-        $diffSeconds = max(0, $nowTimestamp - $baseTime); // Prevent negative time if clock skew
-        
-        // Exact real-time calculation: Base + (Seconds Elapsed * Rate)
-        $realTimeValue = (float)$m['base_value'] + ($diffSeconds * (float)$m['rate_per_second']);
-
-        $responseData[] = [
-            'id' => (int)$m['id'],
-            'asset_tag' => $m['asset_tag'],
-            'metric_name' => $m['metric_name'],
-            'unit' => $m['unit'],
-            
-            // The exact calculated value at the time the API was hit
-            'current_calculated_value' => round($realTimeValue, 6),
-            
-            // Provide parameters for frontend smooth animation (setInterval)
-            'animation_params' => [
-                'rate_per_second' => (float)$m['rate_per_second'],
-                'base_timestamp_utc' => gmdate('Y-m-d\TH:i:s\Z', $baseTime),
-                'base_value' => (float)$m['base_value']
-            ]
-        ];
+    // 2. Sum Sarju-III & Sarju-II Units (Sheets 2 & 3)
+    $stmtHydro = $pdo->query("
+        SELECT plant_code, COALESCE(SUM(units_kwh), 0) AS total_kwh
+        FROM hydro_generation_units
+        GROUP BY plant_code
+    ");
+    $hydroTotals = ['SARJU_3' => 0.0, 'SARJU_2' => 0.0];
+    foreach ($stmtHydro->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $hydroTotals[$row['plant_code']] = (float)$row['total_kwh'];
     }
+
+    // 3. Sheet 4 Locked Formulas
+    $carbonSavedPerLitreKg = 0.83; // (2348g - 2182g) * 5 / 1000
+    $ethanolCarbonSavedTonnes = ($ethanolLitres * $carbonSavedPerLitreKg) / 1000.0;
+
+    $totalHydroKwh = $hydroTotals['SARJU_3'] + $hydroTotals['SARJU_2'];
+    $hydroEnergyGeneratedGwh = $totalHydroKwh / 1000000.0; // Yellow Showcase Field 1
+    $coalEmissionFactor = 0.969; // kg CO2 / kWh
+    $hydroCarbonSavedTonnes = ($totalHydroKwh * $coalEmissionFactor) / 1000.0;
+
+    $totalCarbonSavedTonnes = $ethanolCarbonSavedTonnes + $hydroCarbonSavedTonnes; // Yellow Showcase Field 2
 
     echo json_encode([
         'success' => true,
-        'server_time' => $serverTimeIso,
-        'data' => $responseData
+        'updated_at' => gmdate('Y-m-d\TH:i:s\Z'),
+        'showcase_yellow_fields' => [
+            'hydro_energy_generated_gwh' => round($hydroEnergyGeneratedGwh, 2),
+            'hydro_energy_generated_gwh_exact' => round($hydroEnergyGeneratedGwh, 6),
+            'total_carbon_saved_tonnes' => round($totalCarbonSavedTonnes, 2),
+            'total_carbon_saved_tonnes_exact' => round($totalCarbonSavedTonnes, 5),
+        ],
+        'breakdown' => [
+            'ethanol' => [
+                'sales_to_date_litres' => $ethanolLitres,
+                'factor_kg_per_litre' => $carbonSavedPerLitreKg,
+                'tailpipe_carbon_saved_tonnes' => round($ethanolCarbonSavedTonnes, 2),
+            ],
+            'hydro' => [
+                'sarju_3_kwh' => $hydroTotals['SARJU_3'],
+                'sarju_2_kwh' => $hydroTotals['SARJU_2'],
+                'total_units_kwh' => $totalHydroKwh,
+                'energy_generated_gwh' => round($hydroEnergyGeneratedGwh, 6),
+                'coal_emission_factor' => $coalEmissionFactor,
+                'hydro_carbon_saved_tonnes' => round($hydroCarbonSavedTonnes, 5),
+            ],
+            'total_carbon_saved_tonnes' => round($totalCarbonSavedTonnes, 5),
+        ]
     ]);
-
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Telemetry calculation failed.']);
+    echo json_encode(['success' => false, 'message' => 'Failed to compute carbon savings workbook.']);
 }
