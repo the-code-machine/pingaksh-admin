@@ -47,12 +47,12 @@ if ($userRole === 'super_admin') {
             'url' => BASE_URL . '/admin/announcements/index.php',
             'icon' => 'megaphone'
         ],
-        [
-            'key' => 'documents',
-            'label' => 'Documents',
-            'url' => BASE_URL . '/admin/documents/index.php',
-            'icon' => 'file-text'
-        ],
+[
+    'key' => 'financials',
+    'label' => 'Financial Reports',
+    'url' => BASE_URL . '/admin/financials/index.php',
+    'icon' => 'landmark'
+],
         [
             'key' => 'media',
             'label' => 'Media Manager',
