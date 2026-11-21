@@ -66,6 +66,12 @@ if ($userRole === 'super_admin') {
             'icon' => 'mail'
         ],
         [
+    'key' => 'careers',
+    'label' => 'Careers',
+    'url' => BASE_URL . '/admin/careers/index.php',
+    'icon' => 'briefcase'
+],
+        [
             'key' => 'vendors',
             'label' => 'Vendor KYC',
             'url' => BASE_URL . '/admin/vendors/index.php',
